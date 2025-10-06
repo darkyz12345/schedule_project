@@ -1,0 +1,12 @@
+[project]
+name = "schedule-project"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.13"
+dependencies = [
+    "aiogram>=3.22.0",
+    "alembic>=1.16.5",
+    "fastapi>=0.118.0",
+    "sqlalchemy>=2.0.43",
+    "uvicorn>=0.37.0",
+]
