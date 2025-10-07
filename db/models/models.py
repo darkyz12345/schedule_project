@@ -15,16 +15,41 @@ class Group(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
-    faculty: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
+    faculty_id: Mapped[Optional[int]] = mapped_column(ForeignKey('faculties.id'), nullable=False)
     admission_year: Mapped[int] = mapped_column(Integer, nullable=False)
     student_count: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
 
     schedules = relationship("Schedule", back_populates="group", cascade="all, delete-orphan")
     users = relationship("BotUser", back_populates="group")
+    faculty = relationship("Faculty", back_populates='groups')
 
     def __repr__(self):
         return f"Группа {self.name}"
+
+
+class Faculty(Base):
+    """Факультет"""
+    __tablename__ = 'faculties'
+    id: Mapped[int] = mapped_column(primary_key=True)
+    faculty_code: Mapped[str] = mapped_column(String(100), nullable=False)
+    name: Mapped[str] = mapped_column(Text)
+
+    groups = relationship('Group', back_populates='faculty')
+
+
+class TeacherSubject(Base):
+    """Предмет -> преподаватель"""
+    __tablename__ = 'teacher_subject'
+
+    teacher_id: Mapped[int] = mapped_column(ForeignKey('teachers.id'), primary_key=True)
+    subject_id: Mapped[int] = mapped_column(ForeignKey('subjects.id'), primary_key=True)
+
+    assigned_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+    qualification: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+
+    teacher = relationship('Teacher', back_populates='teacher_subjects')
+    subject = relationship("Subject", back_populates='teacher_subjects')
 
 
 class Teacher(Base):
@@ -39,6 +64,9 @@ class Teacher(Base):
 
     schedules = relationship("Schedule", back_populates="teacher")
     schedule_changes = relationship("ScheduleChange", foreign_keys="ScheduleChange.new_teacher_id")
+
+    teacher_subjects = relationship("TeacherSubject", back_populates='teacher')
+    subjects = relationship("Subject", secondary='teacher_subject', viewonly=True)
 
     def __repr__(self):
         return f'Преподаватель {self.last_name} {self.first_name[0]}. {self.middle_name[0]}.'
@@ -69,6 +97,9 @@ class Subject(Base):
 
     schedules = relationship("Schedule", back_populates="subject")
     schedule_changes = relationship("ScheduleChange", foreign_keys="ScheduleChange.new_subject_id")
+
+    teacher_subjects = relationship("TeacherSubject", back_populates='subject')
+    teachers = relationship('Teacher', secondary='teacher_subject', viewonly=True)
 
     def __repr__(self):
         return f'Предмет {self.name}'
@@ -145,8 +176,96 @@ class Schedule(Base):
         return f"Расписание {self.group.name}, {self.day_of_week}, {self.time_slot.slot_number}"
 
 
-    class BotUser(Base):
-        """ТГ пользователь"""
-        __tablename__ = "bot_users"
+class BotUser(Base):
+    """ТГ пользователь"""
+    __tablename__ = "bot_users"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, unique=True, nullable=False, index=True)
+    username: Mapped[Optional[str]] = mapped_column(String(100))
+    first_name: Mapped[Optional[str]] = mapped_column(String(100))
+    last_name: Mapped[Optional[str]] = mapped_column(String(100))
+
+    group_id: Mapped[Optional[int]] = mapped_column(ForeignKey('groups.id'))
+
+    is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
+    notifications_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    notifications_time: Mapped[time] = mapped_column(Time, default=time(19, 0))
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=func.now(), onupdate=func.now())
+
+    group = relationship("Group", back_populates="users")
+    created_changes = relationship("ScheduleChange", back_populates='created_by_user')
+
+    def __repr__(self):
+        return f'Пользователь {self.first_name} {self.user_id}'
+
+
+class SemesterSettings(Base):
+    """Настройки семестра"""
+    __tablename__ = "semester_settings"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    semester_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    start_date: Mapped[date] = mapped_column(Date, nullable=False)
+    end_date: Mapped[date] = mapped_column(Date, nullable=False)
+    first_week_type: Mapped[str] = mapped_column(String(10), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+
+    __table_args__ = (
+        CheckConstraint("first_week_type IN ('upper', 'lower', 'both')", name="check_first_week_type"),
+    )
+
+    def __repr__(self):
+        return f"Семестр {self.semester_name}"
+
+
+class ScheduleChange(Base):
+    """Замена, изменение занятия"""
+    __tablename__ = "schedule_changes"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    original_schedule_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey('schedule.id', ondelete="CASCADE")
+    )
+    change_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+
+    new_subject_id: Mapped[Optional[int]] = mapped_column(ForeignKey('subjects.id'))
+    new_teacher_id: Mapped[Optional[int]] = mapped_column(ForeignKey('teachers.id'))
+    new_room_id: Mapped[Optional[int]] = mapped_column(ForeignKey('rooms.id'))
+    new_time_slot_id: Mapped[Optional[int]] = mapped_column(ForeignKey('time_slots.id'))
+
+    is_cancelled: Mapped[bool] = mapped_column(Boolean, default=False)
+    reason: Mapped[str] = mapped_column(Text)
+
+    created_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey('bot_users.id'))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+
+    original_schedule = relationship("Schedule", back_populates="changes")
+    new_subject = relationship("Subject")
+    new_teacher = relationship("Teacher")
+    new_room = relationship("Room")
+    new_time_slot = relationship("TimeSlot")
+    created_by_user = relationship("BotUser", back_populates='created_changes')
+
+    def __repr__(self):
+        return f'Изменение в расписании {self.change_date} {self.id}'
+
+
+class AdminUser(Base):
+    """Администратор веб-панели"""
+    __tablename__ = 'admin_users'
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    username: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    full_name: Mapped[Optional[str]] = mapped_column(String(150))
+    role: Mapped[str] = mapped_column(String(50), default='editor')
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+    last_login: Mapped[Optional[datetime]] = mapped_column(DateTime)
+
+    def __repr__(self):
+        return f'Админ {self.username} {self.role}'
