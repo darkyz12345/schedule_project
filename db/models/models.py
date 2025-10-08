@@ -4,6 +4,7 @@ from sqlalchemy import (Column, Integer, String, Boolean, DateTime, Date, Time, 
                         CheckConstraint, UniqueConstraint, func)
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, Mapped, mapped_column
+from sqlalchemy_utils import EmailType
 from sqlalchemy.ext.asyncio import AsyncAttrs, create_async_engine, async_sessionmaker
 
 Base = declarative_base()
@@ -260,12 +261,13 @@ class AdminUser(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     username: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    email: Mapped[EmailType] = mapped_column(EmailType, nullable=False, unique=True)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     full_name: Mapped[Optional[str]] = mapped_column(String(150))
     role: Mapped[str] = mapped_column(String(50), default='editor')
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
-    last_login: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    last_login: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     def __repr__(self):
         return f'Админ {self.username} {self.role}'
