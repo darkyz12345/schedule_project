@@ -269,5 +269,23 @@ class AdminUser(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
     last_login: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
+    sessions = relationship("UserSession", back_populates='admin_user', cascade='all, delete')
+
     def __repr__(self):
         return f'Админ {self.username} {self.role}'
+
+class UserSession(Base):
+    """Данные авторизации админа(устройство, ip)"""
+    __tablename__ = 'user_sessions'
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey('admin_users.id', ondelete='CASCADE'))
+    device_name: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    user_agent: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    ip_address: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    refresh_token: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+    last_active: Mapped[datetime] = mapped_column(DateTime, default=func.now(), onupdate=func.now())
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    admin_user = relationship("AdminUser", back_populates='sessions')
