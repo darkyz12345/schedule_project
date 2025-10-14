@@ -1,1 +1,1 @@
-from .settings import DBSettings
+from .settings import DBSettings, JWTSettings, Settings
